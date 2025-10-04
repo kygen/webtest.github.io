@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>لوحة تحكم الإعلانات والشراء</title>
+  <meta name="color-scheme" content="dark light" />
+  <style>
+    :root{
+      --bg:#0f1320; --card:#121a2a; --text:#f3f6ff; --muted:#9db0d1; --border:#21304c;
+      --btn:#1a2744; --btn-hover:#22345a; --accent:#4ea2ff; --ok:#22c55e; --warn:#eab308;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:radial-gradient(1200px 600px at 20% -10%, #1a2440, transparent), var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{min-height:100svh;display:grid;place-items:center;padding:20px}
+    .card{width:min(720px,100%);background:linear-gradient(180deg,var(--card),#0f182b);border:1px solid var(--border);border-radius:20px;box-shadow:0 20px 45px rgba(0,0,0,.35);padding:18px}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:8px}
+    h1{font-size:18px;margin:0}
+    p.lead{margin:.25rem 0 1rem;color:var(--muted);font-size:14px}
+    .badge{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:#0d1a30;color:var(--muted)}
+    .badge.ok{border-color:rgba(34,197,94,.3);color:#c9ffd9;background:rgba(34,197,94,.08)}
+    .badge.warn{border-color:rgba(234,179,8,.3);color:#fff0c2;background:rgba(234,179,8,.08)}
+    .section{border-top:1px dashed #223356;padding-top:14px;margin-top:12px}
+    .section h2{font-size:14px;margin:0 0 10px;color:var(--muted)}
+    .grid{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}
+    button{appearance:none;border:1px solid var(--border);background:var(--btn);color:var(--text);border-radius:14px;padding:14px 16px;font-size:15px;cursor:pointer;transition:transform .08s ease, background .2s ease, border-color .2s ease}
+    button:hover{background:var(--btn-hover);border-color:#2b4476}
+    button:active{transform:translateY(1px)}
+    .help{margin-top:10px;color:var(--muted);font-size:12px}
+    .log{margin-top:12px;background:#0b1324;border:1px dashed #2a3d63;border-radius:12px;padding:10px;max-height:30svh;overflow:auto;white-space:pre-wrap;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+    footer{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:12px;margin-top:12px}
+    @media (max-width:520px){.grid{grid-template-columns:1fr}}
+    @media (prefers-color-scheme:light){:root{--bg:#f6f8ff;--card:#ffffff;--text:#0c1222;--muted:#50607b;--border:#d9e2f2;--btn:#f0f4ff;--btn-hover:#e6eeff}}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="card" role="region" aria-label="لوحة التحكّم">
+      <header>
+        <h1>لوحة تحكّم الإعلانات والشراء</h1>
+        <span id="status" class="badge" aria-live="polite">جاري الفحص…</span>
+      </header>
+      <p class="lead">اضغط الزر المطلوب وسيقوم الجسر بتنفيذ النداء داخل التطبيق.</p>
+
+      <div class="section" aria-labelledby="adsTitle">
+        <h2 id="adsTitle">الإعلانات</h2>
+        <div class="grid">
+          <button onclick="App.showAd('interstitial')">اعلن بيني (Interstitial)</button>
+          <button onclick="App.showAd('rewarded')">اعلن مكافأة (Rewarded)</button>
+          <button onclick="App.showAd('banner:bottom')">بانر أسفل (Banner)</button>
+          <button onclick="App.showAd('banner:top')">بانر أعلى (Banner)</button>
+        </div>
+        <p class="help">يجب أن يكون <code>window.App</code> متاحًا من خلال <code>bridge.js</code>.</p>
+      </div>
+
+      <div class="section" aria-labelledby="iapTitle">
+        <h2 id="iapTitle">المشتريات داخل التطبيق</h2>
+        <div class="grid">
+          <button onclick="App.purchase('coins_100')">شراء 100 كوين</button>
+          <button onclick="App.purchase('coins_500')">شراء 500 كوين</button>
+        </div>
+      </div>
+
+      <div id="log" class="log" aria-live="polite" aria-label="سجل الأحداث"></div>
+      <footer>
+        <span>© Bridge UI</span>
+        <span>v1.1 – Mobile Ready</span>
+      </footer>
+    </section>
+  </main>
+
+  <!-- ملف الجسر الحقيقي فقط (بدون أي Stub) -->
+  <script defer src="bridge.js"></script>
+
+  <!-- فحص غير تدخّلي لحالة الجسر + طباعة Ping إلى السجل. لا يعرّف أي بدائل للجسر. -->
+  <script>
+    (function(){
+      const statusEl = document.getElementById('status');
+      const logEl = document.getElementById('log');
+      const log = (msg)=>{ logEl.textContent += msg + "
+"; };
+
+      function updateStatus(ok){
+        statusEl.textContent = ok ? 'الجسر متصل' : 'الجسر غير مكتشف';
+        statusEl.classList.remove('ok','warn');
+        statusEl.classList.add(ok ? 'ok' : 'warn');
+      }
+
+      // محاولة آمنة لقراءة ping دون أي بديل للجسر
+      try {
+        if (window.App && typeof App.ping === 'function') {
+          const p = App.ping();
+          updateStatus(true);
+          log('ping: ' + p);
+        } else {
+          updateStatus(false);
+          log('App غير جاهز بعد.');
+        }
+      } catch(e){ updateStatus(false); log('خطأ أثناء ping: ' + e); }
+    })();
+  </script>
+
+  <noscript><div style="padding:12px;text-align:center;color:#b00">⚠️ هذه الصفحة تتطلب JavaScript.</div></noscript>
+</body>
+</html>
