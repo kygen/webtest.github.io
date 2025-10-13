@@ -19,9 +19,10 @@
     header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:8px}
     h1{font-size:18px;margin:0}
     p.lead{margin:.25rem 0 1rem;color:var(--muted);font-size:14px}
-    .badge{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:#0d1a30;color:var(--muted)}
+    .badge{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:#0d1a30;color:var(--muted);transition:background .25s ease,color .25s ease,border-color .25s ease}
     .badge.ok{border-color:rgba(34,197,94,.3);color:#c9ffd9;background:rgba(34,197,94,.08)}
     .badge.warn{border-color:rgba(234,179,8,.3);color:#fff0c2;background:rgba(234,179,8,.08)}
+    .badge.error{border-color:rgba(239,68,68,.35);color:#ffe2e2;background:rgba(239,68,68,.08)}
     .section{border-top:1px dashed #223356;padding-top:14px;margin-top:12px}
     .section h2{font-size:14px;margin:0 0 10px;color:var(--muted)}
     .grid{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -29,6 +30,13 @@
     button:hover{background:var(--btn-hover);border-color:#2b4476}
     button:active{transform:translateY(1px)}
     .help{margin-top:10px;color:var(--muted);font-size:12px}
+    .status-list{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+    .status-pill{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px dashed var(--log-border);border-radius:12px;background:rgba(19,28,45,.6);transition:background .2s ease, border-color .2s ease,color .2s ease}
+    .status-pill.ready{border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.08);color:#c9ffd9}
+    .status-pill.loading{border-color:rgba(234,179,8,.4);background:rgba(234,179,8,.08);color:#fff0c2}
+    .status-pill.blocked{border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.08);color:#ffd6d6}
+    .status-label{font-size:13px;font-weight:600;letter-spacing:.01em}
+    .status-value{font-size:12px}
     .log{margin-top:12px;background:var(--log-bg);border:1px dashed var(--log-border);border-radius:12px;padding:10px;max-height:30svh;overflow:auto;white-space:pre-wrap;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
     footer{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:12px;margin-top:12px}
     @media (max-width:520px){.grid{grid-template-columns:1fr}}
@@ -40,9 +48,9 @@
     <section class="card" role="region" aria-label="لوحة التحكّم">
       <header>
         <h1>لوحة تحكّم الإعلانات والشراء</h1>
-        <span id="status" class="badge" aria-live="polite">جاري الفحص…</span>
+        <span id="status" class="badge warn" aria-live="polite">جارٍ البحث عن الجسر…</span>
       </header>
-      <p class="lead">اضغط الزر المطلوب وسيقوم الجسر بتنفيذ النداء داخل التطبيق.</p>
+      <p class="lead">اضغط الزر المطلوب وسيقوم الجسر بتنفيذ النداء داخل التطبيق، أو اتركه يدير الإعلانات تلقائياً.</p>
 
       <div class="section" aria-labelledby="adsTitle">
         <h2 id="adsTitle">الإعلانات</h2>
@@ -52,7 +60,21 @@
           <button onclick="requestShowAd('banner','bottom')">بانر أسفل (Banner)</button>
           <button onclick="requestShowAd('banner','top')">بانر أعلى (Banner)</button>
         </div>
-        <p class="help">سيتم إرسال طلب <code>ShowAd</code> عبر <code>AndroidBridge.postMessage</code>.</p>
+        <p class="help">سيتم إرسال طلب <code>ShowAd</code> عبر <code>AndroidBridge.postMessage</code>، مع مراقبة جاهزية الإعلانات تلقائياً.</p>
+        <ul class="status-list" id="adStatusList" aria-label="حالة توفر الإعلانات">
+          <li class="status-pill blocked" data-ad-type="interstitial">
+            <span class="status-label">إعلان بيني</span>
+            <span class="status-value">بانتظار التحديث…</span>
+          </li>
+          <li class="status-pill blocked" data-ad-type="rewarded">
+            <span class="status-label">إعلان مكافأة</span>
+            <span class="status-value">بانتظار التحديث…</span>
+          </li>
+          <li class="status-pill blocked" data-ad-type="banner">
+            <span class="status-label">بانر</span>
+            <span class="status-value">بانتظار التحديث…</span>
+          </li>
+        </ul>
       </div>
 
       <div class="section" aria-labelledby="iapTitle">
@@ -71,7 +93,7 @@
           <button onclick="requestInit('prod')">تهيئة بيئة الإنتاج</button>
           <button onclick="requestInit('staging')">تهيئة بيئة الاختبار</button>
         </div>
-        <p class="help">يجب نداء <code>Init</code> مرة واحدة قبل الإعلانات والمشتريات.</p>
+        <p class="help">يتم النداء تلقائياً عند التحميل، ويمكنك إعادة التهيئة يدوياً في أي وقت.</p>
       </div>
 
       <div id="log" class="log" aria-live="polite" aria-label="سجل الأحداث"></div>
@@ -86,6 +108,15 @@
   <script>
     const statusEl = document.getElementById('status');
     const logEl = document.getElementById('log');
+    const adStatusEls = new Map(Array.from(document.querySelectorAll('[data-ad-type]')).map((el) => [el.dataset.adType, el]));
+    const adAvailability = new Map();
+    const autoShowTargets = new Set();
+    const autoShowInProgress = new Set();
+    const AD_LABELS = {
+      interstitial: 'إعلان بيني',
+      rewarded: 'إعلان مكافأة',
+      banner: 'بانر'
+    };
 
     function appendLog(message, tone = 'info') {
       const time = new Date().toLocaleTimeString('ar', { hour12: false });
@@ -94,10 +125,110 @@
       logEl.scrollTop = logEl.scrollHeight;
     }
 
-    function updateStatus(ok) {
-      statusEl.textContent = ok ? 'الجسر متصل' : 'الجسر غير مكتشف';
-      statusEl.classList.remove('ok', 'warn');
-      statusEl.classList.add(ok ? 'ok' : 'warn');
+    function setStatus(text, tone = 'info') {
+      statusEl.textContent = text;
+      statusEl.classList.remove('ok', 'warn', 'error');
+      if (tone === 'ok') {
+        statusEl.classList.add('ok');
+      } else if (tone === 'warn') {
+        statusEl.classList.add('warn');
+      } else if (tone === 'error') {
+        statusEl.classList.add('error');
+      }
+    }
+
+    function describeAvailability(state) {
+      if (state.available) {
+        return 'جاهز للعرض';
+      }
+      if (state.loading) {
+        return 'جارٍ التحميل…';
+      }
+      switch ((state.state || '').toUpperCase()) {
+        case 'DISABLED':
+          return 'الإعلانات معطّلة';
+        case 'MISSING_AD_UNIT':
+          return 'معرّف الإعلان غير مضبوط';
+        case 'LOAD_ERROR':
+          return 'فشل التحميل، ستتم إعادة المحاولة';
+        case 'NOT_INITIALIZED':
+          return 'في انتظار التهيئة';
+        case 'INITIALIZING':
+          return 'جارٍ تهيئة الشبكة الإعلانية…';
+        case 'CONSUMED':
+          return 'تم العرض، جارٍ إعادة التحميل';
+        case 'UNSUPPORTED':
+          return 'غير مدعوم لهذا النوع';
+        case 'NO_SERVICE':
+          return 'مزود الإعلانات غير متوفر';
+        case 'ON_DEMAND':
+          return 'يتم تحميله عند الطلب';
+        default:
+          return 'غير متاح حالياً';
+      }
+    }
+
+    function updateAdStatus(state) {
+      if (!state || !state.adType) {
+        return;
+      }
+      const key = state.adType.toLowerCase();
+      const row = adStatusEls.get(key);
+      if (!row) {
+        return;
+      }
+      const valueEl = row.querySelector('.status-value');
+      const labelEl = row.querySelector('.status-label');
+      if (labelEl) {
+        labelEl.textContent = AD_LABELS[key] || key;
+      }
+      row.classList.remove('ready', 'loading', 'blocked');
+      row.classList.add(state.available ? 'ready' : state.loading ? 'loading' : 'blocked');
+      if (valueEl) {
+        valueEl.textContent = describeAvailability(state);
+      }
+    }
+
+    function handleAvailabilityPayload(payload) {
+      if (!payload || !payload.adType) {
+        return null;
+      }
+      const normalized = payload.adType.toLowerCase();
+      const snapshot = {
+        adType: normalized,
+        placementId: payload.placementId || null,
+        available: Boolean(payload.available),
+        loading: Boolean(payload.loading),
+        state: payload.state || null
+      };
+      adAvailability.set(normalized, snapshot);
+      updateAdStatus(snapshot);
+      attemptAutoShow(normalized);
+      return snapshot;
+    }
+
+    function attemptAutoShow(adType) {
+      const normalized = (adType || '').toLowerCase();
+      if (!normalized || !autoShowTargets.has(normalized) || autoShowInProgress.has(normalized)) {
+        return;
+      }
+      const state = adAvailability.get(normalized);
+      if (!state || !state.available || state.loading) {
+        return;
+      }
+
+      autoShowInProgress.add(normalized);
+      appendLog(`تشغيل ${AD_LABELS[normalized] || normalized} تلقائيًا بمجرد جاهزيته.`);
+      requestShowAd(normalized)
+        .then(() => {
+          autoShowTargets.delete(normalized);
+          autoShowInProgress.delete(normalized);
+        })
+        .catch((error) => {
+          appendLog(`فشل العرض التلقائي: ${error.message}`, 'error');
+          autoShowInProgress.delete(normalized);
+          setTimeout(() => attemptAutoShow(normalized), 2500);
+        });
     }
 
     function send(action, payload) {
@@ -113,47 +244,146 @@
     }
 
     function requestInit(environment) {
-      send('Init', {
+      return send('Init', {
         environment,
         features: { ads: true, iap: true }
       });
     }
 
     function requestShowAd(adType, placementId) {
-      send('ShowAd', {
+      const normalized = (adType || '').toLowerCase();
+      if (normalized) {
+        autoShowTargets.delete(normalized);
+        autoShowInProgress.delete(normalized);
+      }
+      return send('ShowAd', {
         adType,
         placementId: placementId || undefined
       });
     }
 
     function requestPurchase(productId) {
-      send('Purchase', { productId });
+      return send('Purchase', { productId });
     }
 
     function requestCheckProduct(productId) {
-      send('CheckProduct', { productId });
+      return send('CheckProduct', { productId });
     }
 
     function requestRestore() {
-      send('RestorePurchases', {});
+      return send('RestorePurchases', {});
+    }
+
+    function checkAdAvailability(adType, placementId) {
+      return send('CheckAdAvailability', {
+        adType,
+        placementId: placementId || undefined
+      }).then((result) => handleAvailabilityPayload(result.payload) || result.payload || {});
+    }
+
+    function waitForBridge(timeoutMs = 8000) {
+      if (WebBridge.isAvailable()) {
+        return Promise.resolve();
+      }
+
+      return new Promise((resolve, reject) => {
+        const start = Date.now();
+        const unsubscribe = WebBridge.subscribe((event) => {
+          if (event === 'bridge:available') {
+            cleanup();
+            resolve();
+          }
+        });
+
+        const interval = setInterval(() => {
+          if (WebBridge.isAvailable()) {
+            cleanup();
+            resolve();
+          } else if (Date.now() - start > timeoutMs) {
+            cleanup();
+            reject(new Error('انتهى وقت الانتظار للجسر.'));
+          }
+        }, 400);
+
+        function cleanup() {
+          clearInterval(interval);
+          unsubscribe();
+        }
+      });
+    }
+
+    function autoManageAd(adType) {
+      const normalized = (adType || '').toLowerCase();
+      if (!normalized || autoShowTargets.has(normalized)) {
+        return;
+      }
+      autoShowTargets.add(normalized);
+      attemptAutoShow(normalized);
+
+      const poll = async () => {
+        if (!autoShowTargets.has(normalized)) {
+          return;
+        }
+        try {
+          await checkAdAvailability(normalized);
+        } catch (error) {
+          appendLog(`تعذر التحقق من جاهزية ${AD_LABELS[normalized] || normalized}: ${error.message}`, 'error');
+        }
+        if (autoShowTargets.has(normalized)) {
+          setTimeout(poll, 2500);
+        }
+      };
+      poll();
+    }
+
+    async function bootstrap() {
+      try {
+        await waitForBridge();
+      } catch (error) {
+        setStatus('لم يتم العثور على الجسر. افتح التطبيق الأصلي.', 'warn');
+        throw error;
+      }
+
+      setStatus('جارٍ تهيئة الإعلانات…', 'warn');
+
+      try {
+        await requestInit('staging');
+        setStatus('تم الاتصال بالجسر وتهيئة الإعلانات.', 'ok');
+      } catch (error) {
+        setStatus('فشل تهيئة الإعلانات.', 'error');
+        throw error;
+      }
+
+      autoManageAd('interstitial');
+      checkAdAvailability('rewarded').catch(() => {});
+      checkAdAvailability('banner').catch(() => {});
     }
 
     WebBridge.subscribe((event, detail) => {
-      if (event === 'bridge:unavailable') {
-        updateStatus(false);
-        appendLog('الجسر متاح فقط داخل التطبيق.', 'warn');
-      } else if (event === 'bridge:available') {
-        updateStatus(true);
-        appendLog('تم اكتشاف الجسر.', 'info');
-      } else if (event === 'request:sent') {
-        appendLog(`إرسال ${detail.action} (${detail.requestId})`, 'info');
+      switch (event) {
+        case 'bridge:unavailable':
+          setStatus('الجسر غير مكتشف بعد.', 'warn');
+          appendLog('الجسر متاح فقط داخل التطبيق.', 'warn');
+          break;
+        case 'bridge:available':
+          setStatus('تم اكتشاف الجسر، جارٍ التهيئة…', 'warn');
+          break;
+        case 'request:sent':
+          appendLog(`إرسال ${detail.action} (${detail.requestId})`, 'info');
+          break;
+        case 'event:adAvailability':
+          handleAvailabilityPayload(detail);
+          break;
+        default:
+          break;
       }
     });
 
     document.addEventListener('DOMContentLoaded', () => {
-      const available = WebBridge.isAvailable();
-      updateStatus(available);
-      appendLog(available ? 'الجسر جاهز للطلبات.' : 'لم يتم العثور على AndroidBridge.');
+      appendLog('يتم التحقق من الجسر المضمن…');
+      bootstrap().catch((error) => {
+        appendLog(`فشل الإعداد التلقائي: ${error.message}`, 'error');
+      });
     });
 
     window.requestInit = requestInit;

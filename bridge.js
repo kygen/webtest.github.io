@@ -1,17 +1,20 @@
 (function (global) {
   const REQUEST = 'REQUEST';
   const RESPONSE = 'RESPONSE';
-  const ACTIONS = new Set(['Init', 'ShowAd', 'Purchase', 'CheckProduct', 'RestorePurchases']);
-  const AD_TYPES = new Set(['interstitial', 'rewarded', 'banner']);
+  const EVENT = 'EVENT';
+  const ACTIONS = new Set(['Init', 'ShowAd', 'Purchase', 'CheckProduct', 'RestorePurchases', 'CheckAdAvailability']);
+  const AD_TYPES = new Set(['interstitial', 'rewarded', 'banner', 'app_open', 'appopen', 'rewarded_interstitial', 'rewardedinterstitial']);
 
   const callbacks = new Map();
   const listeners = new Set();
   const queue = [];
-  const pendingActions = new Set();
+  const pendingExclusive = new Map();
+  const adWindow = [];
   let activeRequestId = null;
-  let adWindow = [];
 
-  function now() { return Date.now(); }
+  function now() {
+    return Date.now();
+  }
 
   function hasBridge() {
     return global.AndroidBridge && typeof global.AndroidBridge.postMessage === 'function';
@@ -24,14 +27,30 @@
     return `${now()}-${Math.random().toString(16).slice(2)}`;
   }
 
+  function isExclusive(action) {
+    switch (action) {
+      case 'Init':
+      case 'ShowAd':
+      case 'Purchase':
+      case 'RestorePurchases':
+        return true;
+      default:
+        return false;
+    }
+  }
+
   function notify(type, detail) {
     listeners.forEach((fn) => {
-      try { fn(type, detail); } catch (err) { console.error('[Bridge] listener error', err); }
+      try {
+        fn(type, detail);
+      } catch (err) {
+        console.error('[Bridge] listener error', err);
+      }
     });
   }
 
   function cleanAdWindow(timestamp) {
-    adWindow = adWindow.filter((t) => timestamp - t < 10000);
+    adWindow.splice(0, adWindow.length, ...adWindow.filter((t) => timestamp - t < 10000));
   }
 
   function reserveAdSlot() {
@@ -64,21 +83,32 @@
       throw new Error('Action غير مدعومة: ' + action);
     }
 
-    if (pendingActions.has(action)) {
+    if (isExclusive(action) && pendingExclusive.has(action)) {
       throw new Error('لا يزال هناك طلب قيد التنفيذ لنفس النوع.');
     }
 
-    if (action === 'ShowAd') {
+    if (action === 'ShowAd' || action === 'CheckAdAvailability') {
       const adType = payload && payload.adType;
-      if (!AD_TYPES.has(adType)) {
+      if (!AD_TYPES.has((adType || '').toLowerCase())) {
         throw new Error('قيمة adType غير صالحة.');
       }
     }
 
-    if (action === 'Purchase' || action === 'CheckProduct') {
-      if (!payload || typeof payload.productId !== 'string' || payload.productId.trim() === '') {
-        throw new Error('productId مطلوب.');
-      }
+    if ((action === 'Purchase' || action === 'CheckProduct') && (!payload || typeof payload.productId !== 'string' || payload.productId.trim() === '')) {
+      throw new Error('productId مطلوب.');
+    }
+  }
+
+  function completeExclusive(action) {
+    if (!isExclusive(action)) {
+      return;
+    }
+
+    const current = pendingExclusive.get(action) || 0;
+    if (current <= 1) {
+      pendingExclusive.delete(action);
+    } else {
+      pendingExclusive.set(action, current - 1);
     }
   }
 
@@ -103,7 +133,7 @@
       console.error('[Bridge] postMessage failed', error);
       activeRequestId = null;
       releaseAdSlot(entry.adTimestamp);
-      pendingActions.delete(entry.action);
+      completeExclusive(entry.action);
       callbacks.delete(entry.requestId);
       entry.reject(error);
       notify('request:error', { action: entry.action, requestId: entry.requestId, error });
@@ -142,9 +172,12 @@
         payload
       };
 
+      if (isExclusive(action)) {
+        pendingExclusive.set(action, (pendingExclusive.get(action) || 0) + 1);
+      }
+
       const entry = { requestId, action, payload, resolve, reject, message, adTimestamp };
       callbacks.set(requestId, entry);
-      pendingActions.add(action);
       queue.push(entry);
       drainQueue();
     });
@@ -169,7 +202,7 @@
     }
 
     callbacks.delete(requestId);
-    pendingActions.delete(entry.action);
+    completeExclusive(entry.action);
 
     if (activeRequestId === requestId) {
       activeRequestId = null;
@@ -192,7 +225,23 @@
       entry.reject(err);
     }
 
+    releaseAdSlot(entry.adTimestamp);
     setTimeout(drainQueue, 0);
+  }
+
+  function handleEvent(data) {
+    notify('event:received', data);
+    if (!data || typeof data.event !== 'string') {
+      return;
+    }
+
+    switch (data.event) {
+      case 'AdAvailabilityChanged':
+        notify('event:adAvailability', data.payload || {});
+        break;
+      default:
+        break;
+    }
   }
 
   function onNativeMessage(jsonString) {
@@ -210,11 +259,11 @@
       return;
     }
 
-    if (data.type !== RESPONSE) {
-      return;
+    if (data.type === RESPONSE) {
+      handleResponse(data);
+    } else if (data.type === EVENT) {
+      handleEvent(data);
     }
-
-    handleResponse(data);
   }
 
   function subscribe(listener) {
