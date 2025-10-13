@@ -15,17 +15,12 @@
     body{margin:0;background:radial-gradient(1200px 600px at 20% -10%, #1a2440, transparent), var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
     .wrap{min-height:100svh;display:grid;place-items:center;padding:20px}
     .card{width:min(720px,100%);background:linear-gradient(180deg,var(--card),#0f182b);border:1px solid var(--border);border-radius:20px;box-shadow:0 20px 45px rgba(0,0,0,.35);padding:18px}
-    header{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:8px}
     h1{font-size:18px;margin:0}
     p.lead{margin:.25rem 0 1rem;color:var(--muted);font-size:14px}
     .badge{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:#0d1a30;color:var(--muted)}
     .badge.ok{border-color:rgba(34,197,94,.3);color:#c9ffd9;background:rgba(34,197,94,.08)}
     .badge.warn{border-color:rgba(234,179,8,.3);color:#fff0c2;background:rgba(234,179,8,.08)}
-    .badge.pending{border-color:rgba(78,162,255,.35);color:#e2f1ff;background:rgba(78,162,255,.12)}
-    .badge.error{border-color:rgba(239,68,68,.4);color:#ffe1e1;background:rgba(239,68,68,.12)}
-    .badge.idle{opacity:.8}
-    .status-group{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
-    .title-block{display:flex;flex-direction:column;gap:4px;max-width:60ch}
     .section{border-top:1px dashed #223356;padding-top:14px;margin-top:12px}
     .section h2{font-size:14px;margin:0 0 10px;color:var(--muted)}
     .grid{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -43,15 +38,10 @@
   <main class="wrap">
     <section class="card" role="region" aria-label="لوحة التحكّم">
       <header>
-        <div class="title-block">
-          <h1>لوحة تحكّم الإعلانات والشراء</h1>
-          <p class="lead">اضغط الزر المطلوب وسيقوم الجسر بتنفيذ النداء داخل التطبيق.</p>
-        </div>
-        <div class="status-group">
-          <span id="status" class="badge warn" aria-live="polite">جاري الفحص…</span>
-          <span id="requestStatus" class="badge idle" aria-live="polite">لا يوجد طلب نشط</span>
-        </div>
+        <h1>لوحة تحكّم الإعلانات والشراء</h1>
+        <span id="status" class="badge" aria-live="polite">جاري الفحص…</span>
       </header>
+      <p class="lead">اضغط الزر المطلوب وسيقوم الجسر بتنفيذ النداء داخل التطبيق.</p>
 
       <div class="section" aria-labelledby="adsTitle">
         <h2 id="adsTitle">الإعلانات</h2>
@@ -94,56 +84,13 @@
   <script defer src="bridge.js"></script>
   <script>
     const statusEl = document.getElementById('status');
-    const requestStatusEl = document.getElementById('requestStatus');
     const logEl = document.getElementById('log');
-
-    const actionNames = {
-      Init: 'تهيئة',
-      ShowAd: 'عرض إعلان',
-      Purchase: 'شراء',
-      CheckProduct: 'فحص منتج',
-      RestorePurchases: 'استعادة المشتريات'
-    };
-
-    let pendingRequest = null;
 
     function appendLog(message, tone = 'info') {
       const time = new Date().toLocaleTimeString('ar', { hour12: false });
       const prefix = tone === 'error' ? '✗' : tone === 'warn' ? '⚠️' : '✓';
       logEl.textContent += `[${time}] ${prefix} ${message}\n`;
       logEl.scrollTop = logEl.scrollHeight;
-    }
-
-    function formatAction(action) {
-      return actionNames[action] || action || 'طلب';
-    }
-
-    function setRequestStatus(state, message) {
-      if (!requestStatusEl) {
-        return;
-      }
-
-      requestStatusEl.textContent = message;
-      requestStatusEl.classList.remove('ok', 'warn', 'pending', 'error', 'idle');
-      const className = state === 'success' ? 'ok' : state === 'pending' ? 'pending' : state === 'error' ? 'error' : 'idle';
-      requestStatusEl.classList.add(className);
-    }
-
-    function formatError(code, message) {
-      if (!message || message === code) {
-        return code;
-      }
-      return `${code} / ${message}`;
-    }
-
-    function resolveRequestId(action, requestId) {
-      if (requestId) {
-        return requestId;
-      }
-      if (pendingRequest && (!action || pendingRequest.action === action)) {
-        return pendingRequest.requestId || '?';
-      }
-      return '?';
     }
 
     function updateStatus(ok) {
@@ -153,22 +100,13 @@
     }
 
     function send(action, payload) {
-      pendingRequest = null;
-      setRequestStatus('pending', `جار تجهيز ${formatAction(action)}…`);
-
       return WebBridge.sendRequest(action, payload)
         .then((result) => {
           appendLog(`${action} (${result.requestId}) → SUCCESS ${JSON.stringify(result.payload)}`);
           return result;
         })
         .catch((error) => {
-          const code = error.code || 'UNKNOWN';
-          const requestId = resolveRequestId(action, error.requestId);
-          const combined = formatError(code, error.message || code);
-          setRequestStatus('error', `فشل ${formatAction(action)} (${requestId}) – ${combined}`);
-          const message = `${action} (${requestId}) → ERROR ${code}${error.message ? ` ${error.message}` : ''}`;
-          appendLog(message.trim(), 'error');
-          pendingRequest = null;
+          appendLog(`${action} (${error.requestId || '?'}) → ERROR ${error.code || 'UNKNOWN'} ${error.message}`, 'error');
           throw error;
         });
     }
@@ -199,7 +137,7 @@
       send('RestorePurchases', {});
     }
 
-    WebBridge.subscribe((event, detail = {}) => {
+    WebBridge.subscribe((event, detail) => {
       if (event === 'bridge:unavailable') {
         updateStatus(false);
         appendLog('الجسر متاح فقط داخل التطبيق.', 'warn');
@@ -207,30 +145,13 @@
         updateStatus(true);
         appendLog('تم اكتشاف الجسر.', 'info');
       } else if (event === 'request:sent') {
-        pendingRequest = detail;
-        setRequestStatus('pending', `جار تنفيذ ${formatAction(detail.action)} (${detail.requestId})…`);
         appendLog(`إرسال ${detail.action} (${detail.requestId})`, 'info');
-      } else if (event === 'request:success') {
-        const requestId = resolveRequestId(detail.action, detail.requestId);
-        setRequestStatus('success', `نجح ${formatAction(detail.action)} (${requestId})`);
-        pendingRequest = null;
-      } else if (event === 'request:error') {
-        const requestId = resolveRequestId(detail.action, detail.requestId);
-        const code = detail.error && detail.error.code ? detail.error.code : 'UNKNOWN';
-        const messageText = detail.error && detail.error.message ? detail.error.message : code;
-        setRequestStatus('error', `فشل ${formatAction(detail.action)} (${requestId}) – ${formatError(code, messageText)}`);
-        pendingRequest = null;
-      } else if (event === 'request:rejected') {
-        const reason = detail.reason || (detail.error && detail.error.message) || 'تم رفض الطلب.';
-        setRequestStatus('error', `تم رفض ${formatAction(detail.action)} – ${reason}`);
-        pendingRequest = null;
       }
     });
 
     document.addEventListener('DOMContentLoaded', () => {
       const available = WebBridge.isAvailable();
       updateStatus(available);
-      setRequestStatus('idle', 'لا يوجد طلب نشط');
       appendLog(available ? 'الجسر جاهز للطلبات.' : 'لم يتم العثور على AndroidBridge.');
     });
 
@@ -240,7 +161,6 @@
     window.requestCheckProduct = requestCheckProduct;
     window.requestRestore = requestRestore;
   </script>
-
 
   <noscript><div style="padding:12px;text-align:center;color:#b00">⚠️ هذه الصفحة تتطلب JavaScript.</div></noscript>
 </body>

@@ -106,14 +106,7 @@
       pendingActions.delete(entry.action);
       callbacks.delete(entry.requestId);
       entry.reject(error);
-      notify('request:error', {
-        action: entry.action,
-        requestId: entry.requestId,
-        error: {
-          code: error.code || 'POST_MESSAGE_FAILED',
-          message: error.message || 'postMessage failed'
-        }
-      });
+      notify('request:error', { action: entry.action, requestId: entry.requestId, error });
       setTimeout(drainQueue, 0);
     }
   }
@@ -128,23 +121,7 @@
           adTimestamp = reserveAdSlot();
         }
       } catch (validationError) {
-        notify('request:rejected', {
-          action,
-          payload,
-          reason: validationError.message,
-          error: {
-            code: 'VALIDATION_FAILED',
-            message: validationError.message
-          }
-        });
-        notify('request:error', {
-          action,
-          requestId: null,
-          error: {
-            code: 'VALIDATION_FAILED',
-            message: validationError.message
-          }
-        });
+        notify('request:rejected', { action, payload, reason: validationError.message });
         reject(validationError);
         return;
       }
@@ -152,14 +129,6 @@
       if (!hasBridge()) {
         const err = new Error('الجسر متاح فقط داخل التطبيق.');
         notify('bridge:unavailable', null);
-        notify('request:error', {
-          action,
-          requestId: null,
-          error: {
-            code: 'BRIDGE_UNAVAILABLE',
-            message: err.message
-          }
-        });
         reject(err);
         releaseAdSlot(adTimestamp);
         return;
@@ -207,17 +176,11 @@
     }
 
     if (data.status === 'SUCCESS') {
-      const payload = data.payload || {};
-      notify('request:success', {
-        action: entry.action,
-        requestId,
-        payload
-      });
       entry.resolve({
         requestId,
         action: entry.action,
         status: data.status,
-        payload
+        payload: data.payload || {}
       });
     } else {
       const errorInfo = data.error || {};
@@ -226,23 +189,8 @@
       err.payload = data.payload || {};
       err.requestId = requestId;
       err.action = entry.action;
-      notify('request:error', {
-        action: entry.action,
-        requestId,
-        error: {
-          code: err.code,
-          message: err.message
-        },
-        payload: err.payload
-      });
       entry.reject(err);
     }
-
-    notify('request:completed', {
-      action: entry.action,
-      requestId,
-      status: data.status
-    });
 
     setTimeout(drainQueue, 0);
   }
