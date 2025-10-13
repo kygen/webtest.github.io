@@ -9,6 +9,7 @@
     :root{
       --bg:#0f1320; --card:#121a2a; --text:#f3f6ff; --muted:#9db0d1; --border:#21304c;
       --btn:#1a2744; --btn-hover:#22345a; --accent:#4ea2ff; --ok:#22c55e; --warn:#eab308;
+      --log-bg:#0b1324; --log-border:#2a3d63;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
@@ -28,10 +29,10 @@
     button:hover{background:var(--btn-hover);border-color:#2b4476}
     button:active{transform:translateY(1px)}
     .help{margin-top:10px;color:var(--muted);font-size:12px}
-    .log{margin-top:12px;background:#0b1324;border:1px dashed #2a3d63;border-radius:12px;padding:10px;max-height:30svh;overflow:auto;white-space:pre-wrap;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+    .log{margin-top:12px;background:var(--log-bg);border:1px dashed var(--log-border);border-radius:12px;padding:10px;max-height:30svh;overflow:auto;white-space:pre-wrap;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
     footer{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:12px;margin-top:12px}
     @media (max-width:520px){.grid{grid-template-columns:1fr}}
-    @media (prefers-color-scheme:light){:root{--bg:#f6f8ff;--card:#ffffff;--text:#0c1222;--muted:#50607b;--border:#d9e2f2;--btn:#f0f4ff;--btn-hover:#e6eeff}}
+    @media (prefers-color-scheme:light){:root{--bg:#f6f8ff;--card:#ffffff;--text:#0c1222;--muted:#50607b;--border:#d9e2f2;--btn:#f0f4ff;--btn-hover:#e6eeff;--log-bg:#f8faff;--log-border:#c4d4f0}}
   </style>
 </head>
 <body>
