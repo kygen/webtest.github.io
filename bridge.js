@@ -11,6 +11,7 @@
   const pendingExclusive = new Map();
   const adWindow = [];
   let activeRequestId = null;
+  const EXCLUSIVE_TIMEOUT_MS = 20000;
 
   function now() {
     return Date.now();
@@ -112,6 +113,37 @@
     }
   }
 
+  function clearEntryTimeout(entry) {
+    if (entry && entry.timeoutId) {
+      clearTimeout(entry.timeoutId);
+      entry.timeoutId = null;
+    }
+  }
+
+  function handleTimeout(requestId) {
+    const entry = callbacks.get(requestId);
+    if (!entry) {
+      return;
+    }
+
+    callbacks.delete(requestId);
+    completeExclusive(entry.action);
+
+    if (activeRequestId === requestId) {
+      activeRequestId = null;
+    }
+
+    const error = new Error('انتهت مهلة الطلب. يرجى المحاولة مرة أخرى.');
+    error.code = 'TIMEOUT';
+    error.requestId = requestId;
+    error.action = entry.action;
+
+    releaseAdSlot(entry.adTimestamp);
+    entry.reject(error);
+    notify('request:timeout', { action: entry.action, requestId, error });
+    setTimeout(drainQueue, 0);
+  }
+
   function drainQueue() {
     if (activeRequestId || queue.length === 0) {
       return;
@@ -129,12 +161,16 @@
       commitAdSlot(entry.adTimestamp);
       notify('request:sent', { action: entry.action, requestId: entry.requestId, payload: entry.payload });
       global.AndroidBridge.postMessage(JSON.stringify(entry.message));
+      if (isExclusive(entry.action)) {
+        entry.timeoutId = setTimeout(() => handleTimeout(entry.requestId), EXCLUSIVE_TIMEOUT_MS);
+      }
     } catch (error) {
       console.error('[Bridge] postMessage failed', error);
       activeRequestId = null;
       releaseAdSlot(entry.adTimestamp);
       completeExclusive(entry.action);
       callbacks.delete(entry.requestId);
+      clearEntryTimeout(entry);
       entry.reject(error);
       notify('request:error', { action: entry.action, requestId: entry.requestId, error });
       setTimeout(drainQueue, 0);
@@ -176,7 +212,7 @@
         pendingExclusive.set(action, (pendingExclusive.get(action) || 0) + 1);
       }
 
-      const entry = { requestId, action, payload, resolve, reject, message, adTimestamp };
+      const entry = { requestId, action, payload, resolve, reject, message, adTimestamp, timeoutId: null };
       callbacks.set(requestId, entry);
       queue.push(entry);
       drainQueue();
@@ -198,9 +234,14 @@
     notify('response:received', data);
 
     if (data.status === 'PENDING') {
+      if (isExclusive(entry.action)) {
+        clearEntryTimeout(entry);
+        entry.timeoutId = setTimeout(() => handleTimeout(requestId), EXCLUSIVE_TIMEOUT_MS);
+      }
       return;
     }
 
+    clearEntryTimeout(entry);
     callbacks.delete(requestId);
     completeExclusive(entry.action);
 
