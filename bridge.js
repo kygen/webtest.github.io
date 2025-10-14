@@ -294,6 +294,20 @@
     let data;
     try {
       data = JSON.parse(jsonString);
+
+      if (typeof data === 'string') {
+        const trimmed = data.trim();
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+          try {
+            data = JSON.parse(trimmed);
+          } catch (innerError) {
+            console.warn('[Bridge] فشل تحليل الاستجابة المزدوجة', innerError);
+            notify('response:error', { error: innerError, raw: jsonString });
+            return;
+          }
+        }
+      }
     } catch (error) {
       console.warn('[Bridge] فشل تحويل JSON', error);
       notify('response:error', { error });
