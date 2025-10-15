@@ -161,6 +161,7 @@
     </header>
 
     <button id="showAdButton" type="button" disabled>جارٍ التحضير…</button>
+    <button id="showAdDirectButton" type="button">عرض الإعلان فورًا (unityad://)</button>
     <div id="status" class="status" data-tone="warn" role="status">نحاول الوصول إلى الجسر…</div>
     <pre id="log" aria-live="polite">يتم تهيئة الصفحة…</pre>
     <footer>© اختبار محلي للإعلانات - بيئة Staging</footer>
@@ -170,6 +171,7 @@
   <script>
     (function () {
       const button = document.getElementById('showAdButton');
+      const directButton = document.getElementById('showAdDirectButton');
       const statusEl = document.getElementById('status');
       const logEl = document.getElementById('log');
       const logs = [];
@@ -306,6 +308,10 @@
 
       document.addEventListener('DOMContentLoaded', () => {
         button.addEventListener('click', showAd);
+        directButton.addEventListener('click', () => {
+          appendLog('Triggering interstitial via unityad:// scheme (no JS bridge).');
+          window.location.href = 'unityad://show?type=interstitial';
+        });
 
         ensureBridgeLoaded().then((bridge) => {
           bridge.subscribe((event, detail) => {
