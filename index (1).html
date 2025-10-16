@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Unity AdMob Test Trigger</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        line-height: 1.5;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: radial-gradient(circle at top, #121c2b, #050608 70%);
+        color: #f2f5fa;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 32px 16px;
+      }
+
+      .card {
+        width: min(520px, 100%);
+        background: rgba(7, 18, 30, 0.88);
+        border-radius: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 32px 80px rgba(0, 0, 0, 0.45);
+        padding: 32px;
+        backdrop-filter: blur(14px);
+      }
+
+      h1 {
+        font-size: clamp(26px, 5vw, 34px);
+        margin: 0 0 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      p.description {
+        margin: 0 0 24px;
+        color: rgba(224, 232, 245, 0.86);
+      }
+
+      .actions {
+        display: grid;
+        gap: 16px;
+        margin-top: 24px;
+      }
+
+      button {
+        font: inherit;
+        padding: 14px 18px;
+        border-radius: 12px;
+        border: none;
+        background: linear-gradient(135deg, #35a2ff, #876bff);
+        color: white;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+      }
+
+      button.secondary {
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+        box-shadow: none;
+      }
+
+      button:not(:disabled):hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 32px rgba(53, 162, 255, 0.3);
+      }
+
+      pre {
+        margin: 24px 0 0;
+        padding: 16px;
+        border-radius: 12px;
+        background: rgba(0, 0, 0, 0.4);
+        font-family: "JetBrains Mono", "Fira Code", monospace;
+        font-size: 13px;
+        line-height: 1.55;
+        max-height: 240px;
+        overflow-y: auto;
+      }
+
+      .status {
+        display: grid;
+        gap: 8px;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        background: rgba(255, 255, 255, 0.1);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>Trigger Unity AdMob Tests</h1>
+      <p class="description">
+        Load this page inside the Unity Android WebView. Use the buttons below to
+        request Google AdMob test ads from the Unity integration.
+      </p>
+      <div class="status">
+        <span class="tag" id="unity-status">Unity bridge: waiting...</span>
+        <span class="tag" id="interstitial-status">Interstitial: loading</span>
+        <span class="tag" id="rewarded-status">Rewarded: loading</span>
+      </div>
+      <section class="actions">
+        <button id="btn-load-interstitial" class="secondary" type="button">
+          Reload interstitial test ad
+        </button>
+        <button id="btn-show-interstitial" type="button" disabled>
+          Show interstitial test ad
+        </button>
+        <button id="btn-load-rewarded" class="secondary" type="button">
+          Reload rewarded test ad
+        </button>
+        <button id="btn-show-rewarded" type="button" disabled>
+          Show rewarded test ad
+        </button>
+      </section>
+      <pre id="log">Initializing bridge…</pre>
+    </main>
+    <script>
+      const logArea = document.getElementById("log");
+      const unityStatus = document.getElementById("unity-status");
+      const interstitialStatus = document.getElementById("interstitial-status");
+      const rewardedStatus = document.getElementById("rewarded-status");
+
+      const loadInterstitialButton = document.getElementById(
+        "btn-load-interstitial"
+      );
+      const showInterstitialButton = document.getElementById(
+        "btn-show-interstitial"
+      );
+      const loadRewardedButton = document.getElementById("btn-load-rewarded");
+      const showRewardedButton = document.getElementById("btn-show-rewarded");
+
+      const messageQueue = [];
+      let unityReady = false;
+
+      function appendLog(message) {
+        const timestamp = new Date().toLocaleTimeString();
+        logArea.textContent += `\n[${timestamp}] ${message}`;
+        logArea.scrollTop = logArea.scrollHeight;
+      }
+
+      function updateTag(element, text, ok = true) {
+        element.textContent = text;
+        element.style.background = ok
+          ? "rgba(76, 175, 80, 0.18)"
+          : "rgba(244, 67, 54, 0.18)";
+      }
+
+      function sendToUnity(command, value) {
+        const payload = JSON.stringify({ command, value });
+        appendLog(`Sending -> ${payload}`);
+
+        const trySend = () => {
+          let sent = false;
+          if (window.UnityBridge && typeof UnityBridge.postMessage === "function") {
+            UnityBridge.postMessage(payload);
+            sent = true;
+          }
+          if (!sent && window.unityWebView && typeof unityWebView.postMessage === "function") {
+            unityWebView.postMessage(payload);
+            sent = true;
+          }
+          if (!sent && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.unity) {
+            window.webkit.messageHandlers.unity.postMessage(payload);
+            sent = true;
+          }
+          return sent;
+        };
+
+        if (!unityReady) {
+          messageQueue.push(payload);
+        }
+
+        if (!trySend()) {
+          appendLog("Unity bridge not yet available.");
+        }
+      }
+
+      window.handleUnityMessage = function handleUnityMessage(message) {
+        try {
+          appendLog(`Received <- ${message}`);
+          const data = typeof message === "string" ? JSON.parse(message) : message;
+          const { event, value } = data;
+          switch (event) {
+            case "unityReady":
+              unityReady = true;
+              updateTag(unityStatus, "Unity bridge: connected");
+              while (messageQueue.length > 0) {
+                const buffered = messageQueue.shift();
+                UnityBridge?.postMessage?.(buffered);
+              }
+              break;
+            case "webViewVisible":
+              updateTag(
+                unityStatus,
+                value === "true"
+                  ? "Unity bridge: WebView visible"
+                  : "Unity bridge: WebView hidden"
+              );
+              break;
+            case "interstitialReady":
+              showInterstitialButton.disabled = false;
+              updateTag(interstitialStatus, "Interstitial: ready");
+              break;
+            case "interstitialNotReady":
+              showInterstitialButton.disabled = true;
+              updateTag(interstitialStatus, "Interstitial: not ready", false);
+              break;
+            case "interstitialLoadFailed":
+              showInterstitialButton.disabled = true;
+              updateTag(interstitialStatus, `Interstitial: load failed`, false);
+              break;
+            case "interstitialClosed":
+              updateTag(interstitialStatus, "Interstitial: closed");
+              break;
+            case "rewardedReady":
+              showRewardedButton.disabled = false;
+              updateTag(rewardedStatus, "Rewarded: ready");
+              break;
+            case "rewardedNotReady":
+              showRewardedButton.disabled = true;
+              updateTag(rewardedStatus, "Rewarded: not ready", false);
+              break;
+            case "rewardedLoadFailed":
+              showRewardedButton.disabled = true;
+              updateTag(rewardedStatus, "Rewarded: load failed", false);
+              break;
+            case "rewardEarned":
+              const rewardData = value ? JSON.parse(value) : null;
+              updateTag(
+                rewardedStatus,
+                rewardData
+                  ? `Rewarded: earned ${rewardData.amount} ${rewardData.type}`
+                  : "Rewarded: reward earned"
+              );
+              break;
+            default:
+              appendLog(`Unhandled Unity event: ${event}`);
+          }
+        } catch (err) {
+          appendLog(`Failed to parse Unity message: ${err}`);
+        }
+      };
+
+      loadInterstitialButton.addEventListener("click", () => {
+        sendToUnity("loadInterstitial");
+        updateTag(interstitialStatus, "Interstitial: loading");
+      });
+
+      showInterstitialButton.addEventListener("click", () => {
+        sendToUnity("showInterstitial");
+      });
+
+      loadRewardedButton.addEventListener("click", () => {
+        sendToUnity("loadRewarded");
+        updateTag(rewardedStatus, "Rewarded: loading");
+      });
+
+      showRewardedButton.addEventListener("click", () => {
+        sendToUnity("showRewarded");
+      });
+
+      // Inform Unity that the Web page is ready once the DOM is interactive.
+      document.addEventListener("DOMContentLoaded", () => {
+        updateTag(unityStatus, "Unity bridge: waiting for connection", false);
+        sendToUnity("webPageReady");
+      });
+    </script>
+  </body>
+</html>
